@@ -1,0 +1,101 @@
+#include <Wire.h>
+#include <Adafruit_MLX90614.h>
+#include <Adafruit_GFX.h>
+#include <U8x8lib.h>
+#include <avr/dtostrf.h>
+
+#define REPORTING_PERIOD_MS 1000  // 1 second
+
+// Blynk and WiFi
+#define BLYNK_TEMPLATE_ID "TMPL36g_ZMohT"
+#define BLYNK_TEMPLATE_NAME "Helth moniter"
+#define BLYNK_AUTH_TOKEN "Px33vSI2Gi-5vfUTlBgxXAJVIzjLC1ad"
+#include <SPI.h>
+#include <WiFiNINA.h>
+#include <BlynkSimpleWiFiNINA.h>
+
+char auth[] = "Px33vSI2Gi-5vfUTlBgxXAJVIzjLC1ad";
+char ssid[] = "kulkarni";
+char pass[] = "kulkarni07";
+
+// Sensor & Display Objects
+Adafruit_MLX90614 mlx = Adafruit_MLX90614();
+U8X8_SH1106_128X64_NONAME_HW_I2C u8x8(/* reset=*/ U8X8_PIN_NONE);
+
+// Variables
+uint32_t tsLastReport = 0;
+int hr = 75, spo2 = 98, count = 0, flag = 0, PatientID = 1;
+float ambient = 75.5, object = 98.3, hrv = 42.5;
+int ecg = 55, mic = 400;
+char str_hrv[10], str_object[10], str_ambient[10], str_ir[10], str_red[10];
+
+void setup() {
+  Serial.begin(115200);
+  delay(1000);
+  Serial.println("Starting...");
+
+  Blynk.begin(auth, ssid, pass);
+
+  u8x8.begin();
+  u8x8.setPowerSave(0);
+  u8x8.setFont(u8x8_font_chroma48medium8_r);
+  mlx.begin();
+}
+
+void loop() {
+  Blynk.run();
+
+  if (millis() - tsLastReport > REPORTING_PERIOD_MS) {
+    // Simulated sensor updates
+    hr += (random(-1, 2));
+    spo2 += (random(-1, 2));
+    hrv += (random(-5, 6) / 10.0);
+    ambient += (random(-2, 3) / 10.0);
+    object += (random(-2, 3) / 10.0);
+    ecg = random(40, 80);
+    mic = random(200, 600);
+
+    tsLastReport = millis();
+    count++;
+    send_display();
+    send_blynk();
+    send_serial();
+  }
+}
+
+void send_display() {
+  u8x8.clearDisplay();
+  u8x8.setCursor(0,1);
+  u8x8.print("HRV:"); u8x8.print(hrv); u8x8.print(" ms");
+  u8x8.setCursor(0,2);
+  u8x8.print("SpO2:"); u8x8.print(spo2); u8x8.print(" %");
+  u8x8.setCursor(0,3);
+  u8x8.print("HR:"); u8x8.print(hr); u8x8.print(" bpm");
+  u8x8.setCursor(0,4);
+  u8x8.print("Temp:"); u8x8.print(object); u8x8.print(" F");
+  u8x8.setCursor(0,5);
+  u8x8.print("ECG:"); u8x8.print(ecg);
+  u8x8.setCursor(0,6);
+  u8x8.print("Mic:"); u8x8.print(mic);
+}
+
+void send_blynk() {
+  Blynk.virtualWrite(V2, hrv);
+  Blynk.virtualWrite(V1, spo2);
+  Blynk.virtualWrite(V0, hr);
+  Blynk.virtualWrite(V3, object);
+  Blynk.virtualWrite(V4, ecg);
+ // optional
+}
+
+void send_serial() {
+  char buffer[150];
+  dtostrf(hrv, 4, 2, str_hrv);
+  dtostrf(object, 4, 2, str_object);
+  dtostrf(ambient, 4, 2, str_ambient);
+  dtostrf(5.12, 5, 2, str_ir);  // placeholder
+  dtostrf(4.98, 5, 2, str_red); // placeholder
+  sprintf(buffer, "%d,%d,%d,%d,%s,%s,%s,%s,%s,%d,%d",
+          PatientID, count, hr, spo2, str_hrv, str_object, str_ambient, str_ir, str_red, ecg, mic);
+  Serial.println(buffer);
+}
